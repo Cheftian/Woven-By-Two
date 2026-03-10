@@ -69,6 +69,7 @@ public class ClockBehaviour : MonoBehaviour
     
     [Tooltip("Object to turn ON only after all flowers have withered and disappeared.")]
     [SerializeField] private GameObject objectToEnableAfterFlowersGone;
+    [SerializeField] private GameObject objectToDisableAfterFlowersGone;
 
     private AudioSource audioSource;
     private bool isBeingHeld = false;

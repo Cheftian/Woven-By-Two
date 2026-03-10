@@ -39,13 +39,16 @@ public class MusicalBubbleMinigame : MonoBehaviour
     [SerializeField] private float cameraTransitionDuration = 3f;
 
     [Header("Player Transition Settings")]
+    [Tooltip("If true, the player will NOT move or fade out when the puzzle is completed.")]
+    [SerializeField] private bool dontMovePlayer = false;
+
     [Tooltip("The player object that will be moved.")]
     [SerializeField] private Transform playerTransform;
 
     [Tooltip("The SpriteRenderer of the player to create the fading illusion.")]
     [SerializeField] private SpriteRenderer playerSpriteRenderer;
 
-    [Tooltip("The exact Y coordinate the player will be teleported to for the main game (Only used if NOT prologue).")]
+    [Tooltip("The exact Y coordinate the player will be teleported to for the main game (Only used if NOT prologue AND dontMovePlayer is false).")]
     [SerializeField] private float targetPlayerY = -2f;
     
     [Tooltip("How long the player and next object take to fade out and fade in.")]
@@ -137,8 +140,8 @@ public class MusicalBubbleMinigame : MonoBehaviour
     {
         isMinigameActive = false; 
 
-        // 1. Sang pemain memudar terlebih dahulu dalam keheningan
-        if (playerSpriteRenderer != null)
+        // 1. Sang pemain memudar terlebih dahulu dalam keheningan (HANYA jika diizinkan bergerak)
+        if (!dontMovePlayer && playerSpriteRenderer != null)
         {
             yield return StartCoroutine(FadePlayerSprite(1f, 0f));
         }
@@ -151,8 +154,8 @@ public class MusicalBubbleMinigame : MonoBehaviour
             yield return new WaitForSeconds(cameraTransitionDuration);
         }
 
-        // 3. Raga sang pemain berpindah tempat HANYA jika ini BUKAN prologue
-        if (!isPrologueMinigame && playerTransform != null)
+        // 3. Raga sang pemain berpindah tempat HANYA jika bukan prologue DAN diizinkan bergerak
+        if (!isPrologueMinigame && !dontMovePlayer && playerTransform != null)
         {
             Vector3 newPlayerPos = playerTransform.position;
             // X tetap di tengah area puzzle baru, sedangkan Y memakai nilai dari Inspector
@@ -167,8 +170,8 @@ public class MusicalBubbleMinigame : MonoBehaviour
             yield return StartCoroutine(FadeInNextLevel(nextMinigameObject));
         }
 
-        // 5. Raga sang pemain kembali mewujud di tempatnya
-        if (playerSpriteRenderer != null)
+        // 5. Raga sang pemain kembali mewujud di tempatnya (HANYA jika tadi sempat memudar)
+        if (!dontMovePlayer && playerSpriteRenderer != null)
         {
             yield return StartCoroutine(FadePlayerSprite(0f, 1f));
         }

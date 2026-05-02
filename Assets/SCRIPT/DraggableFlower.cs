@@ -38,14 +38,22 @@ public class DraggableFlower : MonoBehaviour
         rb = GetComponent<Rigidbody2D>();
         randomAudio = GetComponent<RandomAudioOnAwake>();
         flowerCollider = GetComponent<Collider2D>();
+        
+        // Memastikan bunga selalu bisa menemukan pandangan (kamera)
         mainCamera = Camera.main;
+        if (mainCamera == null)
+        {
+            // Jika Tag "MainCamera" terlewat, cari kamera apa pun yang ada di semesta
+            mainCamera = FindFirstObjectByType<Camera>();
+        }
 
         originalScale = transform.localScale;
         
         // Remember the exact spot it was planted in the scene
         homePosition = transform.position; 
         
-        rb.isKinematic = true; 
+        // Menggunakan gaya bahasa Unity 6 yang baru
+        rb.bodyType = RigidbodyType2D.Kinematic; 
     }
 
     private void Update()
@@ -69,13 +77,15 @@ public class DraggableFlower : MonoBehaviour
         transform.localScale = originalScale * dragScaleMultiplier;
         randomAudio.PlayRandomSound();
         
-        rb.isKinematic = true;
+        // Menggunakan gaya bahasa Unity 6 yang baru
+        rb.bodyType = RigidbodyType2D.Kinematic;
         rb.linearVelocity = Vector2.zero;
     }
 
     private void OnMouseDrag()
     {
-        if (isBeingDragged && !isRespawning)
+        // Menambahkan perlindungan ganda untuk memastikan mainCamera benar-benar ada
+        if (isBeingDragged && !isRespawning && mainCamera != null)
         {
             Vector3 mouseWorldPos = mainCamera.ScreenToWorldPoint(Input.mousePosition);
             mouseWorldPos.z = 0f; 
@@ -110,14 +120,17 @@ public class DraggableFlower : MonoBehaviour
 
         if (!collected)
         {
-            rb.isKinematic = false; 
+            // Biarkan gravitasi menariknya jatuh (Unity 6 style)
+            rb.bodyType = RigidbodyType2D.Dynamic; 
         }
     }
 
     private IEnumerator RespawnSequence()
     {
         isRespawning = true;
-        rb.isKinematic = true;
+        
+        // Menggunakan gaya bahasa Unity 6 yang baru
+        rb.bodyType = RigidbodyType2D.Kinematic;
         rb.linearVelocity = Vector2.zero;
         
         // 1. Hide the flower completely (including any fade sprites if they exist)

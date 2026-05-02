@@ -151,7 +151,6 @@ public class ClockBehaviour : MonoBehaviour
         }
     }
 
-    // LateUpdate runs after Update, making it the perfect place to shake the camera 
     private void LateUpdate()
     {
         if (cameraTransform != null)
@@ -172,7 +171,6 @@ public class ClockBehaviour : MonoBehaviour
         }
     }
 
-    // Called when the mouse clicks and holds on the collider
     private void OnMouseDown()
     {
         if (NarrationManager.Instance != null && NarrationManager.Instance.IsNarrationPlaying) return;
@@ -182,18 +180,15 @@ public class ClockBehaviour : MonoBehaviour
         }
     }
 
-    // Called when the mouse releases the click
     private void OnMouseUp()
     {
         if (NarrationManager.Instance != null && NarrationManager.Instance.IsNarrationPlaying) return;
         isBeingHeld = false;
         
-        // Reset the progress, forcing a continuous hold to solve the puzzle
         if (!eventHasTriggered)
         {
-            heldRotationAccumulator = 0f;
-            completedRotations = 0;
-            Debug.Log("Pegangan dilepas, putaran waktu kembali terulang dari awal.");
+            Debug.Log("Pegangan dilepas sejenak. Sang waktu akan menunggu.");
+            Debug.Log("Sisa putaran yang dibutuhkan: " + (requiredRotations - completedRotations));
         }
     }
 
@@ -228,27 +223,56 @@ public class ClockBehaviour : MonoBehaviour
         // Kamera mulai berguncang hebat
         isShakingCamera = true;
 
-        // Kumpulkan seluruh bunga yang ada di layar
-        GameObject[] flowers = GameObject.FindGameObjectsWithTag(flowerTag);
-
-        // Hancurkan dalam kelompok-kelompok
-        for (int i = 0; i < flowers.Length; i += flowersPerBatch)
+        // --- KEAJAIBAN BARU: Lumpuhkan semua interaksi seketika ---
+        GameObject[] allFlowers = GameObject.FindGameObjectsWithTag(flowerTag);
+        foreach (GameObject f in allFlowers)
         {
-            for (int j = 0; j < flowersPerBatch && (i + j) < flowers.Length; j++)
+            if (f != null)
             {
-                GameObject flower = flowers[i + j];
-                if (flower != null)
+                // Cari komponen DraggableFlower dan matikan agar tak bisa disentuh lagi
+                DraggableFlower draggable = f.GetComponent<DraggableFlower>();
+                if (draggable != null)
                 {
-                    // Mulai proses jatuhnya bunga tanpa menunggu yang lain
+                    draggable.enabled = false;
+                }
+            }
+        }
+        Debug.Log("Sihir sentuhan pada bunga telah dicabut.");
+
+        // Menyapu dunia selama masih ada bunga yang tersisa
+        while (true)
+        {
+            GameObject[] flowers = GameObject.FindGameObjectsWithTag(flowerTag);
+
+            if (flowers.Length == 0)
+            {
+                break; 
+            }
+
+            int processedInBatch = 0;
+
+            foreach (GameObject flower in flowers)
+            {
+                if (flower != null && flower.CompareTag(flowerTag))
+                {
+                    // Pastikan sekali lagi script mati (untuk keamanan jika ada bunga yang baru muncul sedetik lalu)
+                    DraggableFlower df = flower.GetComponent<DraggableFlower>();
+                    if (df != null) df.enabled = false;
+
+                    flower.tag = "Untagged"; 
                     StartCoroutine(WitherAndFallRoutine(flower));
+                    
+                    processedInBatch++;
+                    if (processedInBatch >= flowersPerBatch)
+                    {
+                        break; 
+                    }
                 }
             }
 
-            // Jeda sejenak sebelum kelompok bunga berikutnya ikut runtuh
             yield return new WaitForSeconds(delayBetweenBatches);
         }
 
-        // Tunggu sisa waktu jatuhnya kelompok bunga terakhir sebelum memberhentikan gempa
         if (flowerWitherDuration > delayBetweenBatches)
         {
             yield return new WaitForSeconds(flowerWitherDuration - delayBetweenBatches);
@@ -275,6 +299,10 @@ public class ClockBehaviour : MonoBehaviour
         if (objectToEnableAfterFlowersGone != null)
         {
             objectToEnableAfterFlowersGone.SetActive(true);
+        }
+        if (objectToDisableAfterFlowersGone != null)
+        {
+            objectToDisableAfterFlowersGone.SetActive(false);
         }
     }
 

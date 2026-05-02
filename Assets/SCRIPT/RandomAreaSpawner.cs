@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections;
+using System.Collections.Generic;
 
 // This ensures the script always has a BoxCollider2D to define the area
 [RequireComponent(typeof(BoxCollider2D))]
@@ -9,21 +10,24 @@ public class GrowingFlowerSpawner : MonoBehaviour
     [Tooltip("The prefab that will be scattered from the top edge.")]
     [SerializeField] private GameObject prefabToSpawn;
     
-    [Tooltip("Total number of items to spawn (if NOT using cursor or character mode).")]
+    [Tooltip("Total number of flowers. Used for scatter mode AND hidden character seeds.")]
     [SerializeField] private int totalObjectsToSpawn = 20;
 
-    [Tooltip("How long to wait before spawning the next flower.")]
+    [Tooltip("How long to wait before spawning the next flower (Used for Scatter and Cursor modes).")]
     [SerializeField] private float timeBetweenSpawns = 0.2f;
 
     [Header("Interactive Magic Settings")]
     [Tooltip("If true, flowers only grow when the cursor touches this area.")]
     [SerializeField] private bool isCursorSpawner = false;
 
-    [Tooltip("If true, flowers will grow exactly where the specified character is standing.")]
+    [Tooltip("If true, hidden seeds are pre-mapped and will only bloom when the character's collider touches them.")]
     [SerializeField] private bool isCharacterSpawner = false;
 
     [Tooltip("The tag of the character that makes flowers bloom beneath their feet.")]
     [SerializeField] private string characterTag = "Man";
+
+    [Tooltip("Extra looseness/padding. Seeds will bloom even if the character is this far from touching it.")]
+    [SerializeField] private float bloomDistanceThreshold = 0.5f;
 
     [Tooltip("If true, interacting with this spawner triggers the grand ending event.")]
     [SerializeField] private bool isEndingSpawner = false;
@@ -89,15 +93,36 @@ public class GrowingFlowerSpawner : MonoBehaviour
     private bool endingHasTriggered = false;
     private bool hasPlayedFirstFlowerNarration = false;
 
-    // Character presence trackers
-    private bool isCharacterInside = false;
-    private Transform characterTransform;
+    // KEAJAIBAN BARU: Melacak batas fisik (Collider) sang karakter, bukan hanya titik pusatnya
+    private Collider2D trackedCharacterCollider;
+    private List<float> hiddenFlowerSeeds = new List<float>();
 
     private void Start()
     {
         spawnArea = GetComponent<BoxCollider2D>();
         mainCamera = Camera.main;
+        Bounds bounds = spawnArea.bounds;
         
+        // Cari karakter yang akan dilacak batas fisiknya
+        if (isCharacterSpawner)
+        {
+            GameObject characterObj = GameObject.FindGameObjectWithTag(characterTag);
+            if (characterObj != null)
+            {
+                trackedCharacterCollider = characterObj.GetComponent<Collider2D>();
+                if (trackedCharacterCollider == null)
+                {
+                    Debug.LogWarning("Sang pria ditemukan, namun ia tidak memiliki Collider2D untuk menyentuh benih!");
+                }
+            }
+
+            // Memetakan benih-benih rahasia di sepanjang tanah
+            for (int i = 0; i < totalObjectsToSpawn; i++)
+            {
+                hiddenFlowerSeeds.Add(Random.Range(bounds.min.x, bounds.max.x));
+            }
+        }
+
         // Start the magical sequence of growing flowers IF NOT in any interactive mode
         if (!isCursorSpawner && !isCharacterSpawner)
         {
@@ -110,73 +135,68 @@ public class GrowingFlowerSpawner : MonoBehaviour
         // Jangan biarkan bunga tumbuh jika semesta sedang membeku karena narasi
         if (NarrationManager.Instance != null && NarrationManager.Instance.IsNarrationPlaying) return;
 
-        bool shouldSpawnThisFrame = false;
-        float targetSpawnX = 0f;
-
-        // 1. Cek sihir kursor
+        // 1. Cek sihir kursor (seperti biasa)
         if (isCursorSpawner)
         {
             Vector2 mousePos = mainCamera.ScreenToWorldPoint(Input.mousePosition);
             if (spawnArea.OverlapPoint(mousePos))
             {
-                shouldSpawnThisFrame = true;
-                targetSpawnX = mousePos.x;
+                interactionSpawnTimer += Time.deltaTime;
+                if (interactionSpawnTimer >= timeBetweenSpawns)
+                {
+                    interactionSpawnTimer = 0f;
+                    TriggerFlowerInteraction(mousePos.x);
+                }
             }
         }
 
-        // 2. Cek pijakan langkah sang karakter (Ini akan menimpa posisi kursor jika keduanya aktif)
-        if (isCharacterSpawner && isCharacterInside && characterTransform != null)
+        // 2. KEAJAIBAN BARU: Cek sentuhan batas Collider sang karakter terhadap benih
+        if (isCharacterSpawner && trackedCharacterCollider != null)
         {
-            shouldSpawnThisFrame = true;
-            targetSpawnX = characterTransform.position.x;
-        }
-
-        // 3. Tumbuhkan bunga jika ada interaksi
-        if (shouldSpawnThisFrame)
-        {
-            interactionSpawnTimer += Time.deltaTime;
-
-            if (interactionSpawnTimer >= timeBetweenSpawns)
+            // Periksa apakah raga sang karakter bersentuhan dengan area ladang ini
+            if (spawnArea.bounds.Intersects(trackedCharacterCollider.bounds))
             {
-                interactionSpawnTimer = 0f;
-                SpawnSingleFlowerAt(targetSpawnX);
+                Bounds charBounds = trackedCharacterCollider.bounds;
 
-                // --- FIRST FLOWER NARRATION ---
-                if (!hasPlayedFirstFlowerNarration && !string.IsNullOrEmpty(firstFlowerNarrationId))
+                // Periksa setiap benih dari belakang ke depan
+                for (int i = hiddenFlowerSeeds.Count - 1; i >= 0; i--)
                 {
-                    hasPlayedFirstFlowerNarration = true;
-                    if (NarrationManager.Instance != null)
+                    float seedX = hiddenFlowerSeeds[i];
+
+                    // Bunga akan mekar jika posisinya berada di antara ujung kiri dan ujung kanan raga sang karakter
+                    // (Ditambah pelonggaran dari bloomDistanceThreshold)
+                    if (seedX >= (charBounds.min.x - bloomDistanceThreshold) && 
+                        seedX <= (charBounds.max.x + bloomDistanceThreshold))
                     {
-                        NarrationManager.Instance.PlayNarration(firstFlowerNarrationId);
+                        TriggerFlowerInteraction(seedX);
+                        
+                        // Hapus benih dari tanah
+                        hiddenFlowerSeeds.RemoveAt(i);
                     }
                 }
-
-                // --- THE GRAND ENDING TRIGGER ---
-                if (isEndingSpawner && !endingHasTriggered)
-                {
-                    endingHasTriggered = true;
-                    StartCoroutine(GrandEndingRoutine());
-                }
             }
         }
     }
 
-    // --- CHARACTER TRIGGER DETECTION ---
-    private void OnTriggerEnter2D(Collider2D collision)
+    private void TriggerFlowerInteraction(float targetX)
     {
-        if (isCharacterSpawner && collision.CompareTag(characterTag))
-        {
-            isCharacterInside = true;
-            characterTransform = collision.transform;
-        }
-    }
+        SpawnSingleFlowerAt(targetX);
 
-    private void OnTriggerExit2D(Collider2D collision)
-    {
-        if (isCharacterSpawner && collision.CompareTag(characterTag))
+        // --- FIRST FLOWER NARRATION ---
+        if (!hasPlayedFirstFlowerNarration && !string.IsNullOrEmpty(firstFlowerNarrationId))
         {
-            isCharacterInside = false;
-            characterTransform = null;
+            hasPlayedFirstFlowerNarration = true;
+            if (NarrationManager.Instance != null)
+            {
+                NarrationManager.Instance.PlayNarration(firstFlowerNarrationId);
+            }
+        }
+
+        // --- THE GRAND ENDING TRIGGER ---
+        if (isEndingSpawner && !endingHasTriggered)
+        {
+            endingHasTriggered = true;
+            StartCoroutine(GrandEndingRoutine());
         }
     }
 
@@ -206,7 +226,6 @@ public class GrowingFlowerSpawner : MonoBehaviour
         if (prefabToSpawn == null) yield break; 
 
         Bounds bounds = spawnArea.bounds;
-        float topYPosition = bounds.max.y;
 
         for (int i = 0; i < totalObjectsToSpawn; i++)
         {

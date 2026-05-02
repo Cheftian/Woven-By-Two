@@ -5,8 +5,11 @@ using System.Collections;
 public class HorizontalCameraMovement : MonoBehaviour
 {
     [Header("Movement Settings")]
-    [Tooltip("How fast the camera glides across the scene.")]
+    [Tooltip("How fast the camera glides across the scene manually.")]
     [SerializeField] private float moveSpeed = 8f;
+
+    [Tooltip("How smoothly the camera pans to a new target (higher is slower).")]
+    [SerializeField] private float cameraPanSmoothTime = 0.5f;
 
     [Header("Boundary Settings")]
     [Tooltip("The absolute furthest the camera can look to the left.")]
@@ -33,6 +36,10 @@ public class HorizontalCameraMovement : MonoBehaviour
     private bool isTransitioning = false;
     private Transform targetToFollow;
 
+    // Tracker untuk pergerakan kamera sinematik
+    private Coroutine panCoroutine;
+    private float currentPanVelocity = 0f;
+
     private void Start()
     {
         // Jika kisah ini dimulai dengan turunnya pandangan dari langit
@@ -49,7 +56,7 @@ public class HorizontalCameraMovement : MonoBehaviour
 
         Vector3 newPosition = transform.position;
 
-        // If magical automatic mode is active, smoothly follow the target
+        // If magical automatic mode is active, smoothly follow the locked target
         if (isAutomaticMode && targetToFollow != null)
         {
             newPosition.x = Mathf.Lerp(newPosition.x, targetToFollow.position.x, moveSpeed * Time.deltaTime);
@@ -90,17 +97,58 @@ public class HorizontalCameraMovement : MonoBehaviour
 
     public void StartAutomaticFollow(Transform target)
     {
-        targetToFollow = target;
-        isAutomaticMode = true;
+        if (panCoroutine != null)
+        {
+            StopCoroutine(panCoroutine);
+        }
+        
+        // Memulai transisi kamera yang lembut sebelum mengunci target
+        panCoroutine = StartCoroutine(SmoothPanToTarget(target));
     }
 
     public void StopAutomaticFollow()
     {
         isAutomaticMode = false;
         targetToFollow = null;
+
+        if (panCoroutine != null)
+        {
+            StopCoroutine(panCoroutine);
+            panCoroutine = null;
+        }
+        isTransitioning = false;
     }
 
-    // --- NEW MAGIC: The Skyfall Intro ---
+    // --- NEW MAGIC: The Smooth Catch-Up Transition ---
+    private IEnumerator SmoothPanToTarget(Transform target)
+    {
+        targetToFollow = target;
+        isTransitioning = true; // Kunci kendali manual
+        isAutomaticMode = false; // Matikan Lerp instan sementara
+        currentPanVelocity = 0f;
+
+        // Kamera menggeser pandangannya dengan lembut hingga sangat dekat dengan target
+        while (target != null && Mathf.Abs(transform.position.x - target.position.x) > 0.05f)
+        {
+            Vector3 currentPos = transform.position;
+            
+            // SmoothDamp memberikan efek kemudi yang sangat natural dan sinematik
+            currentPos.x = Mathf.SmoothDamp(currentPos.x, target.position.x, ref currentPanVelocity, cameraPanSmoothTime);
+            
+            // Pastikan tetap berada dalam batas dunia
+            currentPos.x = Mathf.Clamp(currentPos.x, leftBoundary, rightBoundary);
+            transform.position = currentPos;
+
+            yield return null;
+        }
+
+        // Setelah pandangan tertuju sempurna, kunci target dan kembalikan kendali
+        isAutomaticMode = true;
+        isTransitioning = false;
+        panCoroutine = null;
+    }
+
+    // --- MAGIC: The Skyfall Intro ---
     private IEnumerator IntroPanRoutine()
     {
         isTransitioning = true;

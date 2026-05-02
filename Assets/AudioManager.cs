@@ -4,15 +4,18 @@ using System;
 [System.Serializable]
 public class SoundData
 {
-    [Tooltip("Nama panggilan untuk melodi ini (misal: 'MainTheme' atau 'WindSFX').")]
+    [Tooltip("The specific name to call this audio (e.g., 'MainTheme' or 'WindSFX').")]
     public string soundName;
     
-    [Tooltip("File audio yang akan dimainkan.")]
+    [Tooltip("The audio file to be played.")]
     public AudioClip clip;
     
-    [Tooltip("Volume khusus untuk audio ini.")]
+    [Tooltip("The volume level for this specific audio.")]
     [Range(0f, 1f)] 
     public float volume = 1f;
+
+    [Tooltip("Check this if the audio should play continuously (loop). Uncheck to play only once.")]
+    public bool loop = true;
 }
 
 public class AudioManager : MonoBehaviour
@@ -20,22 +23,22 @@ public class AudioManager : MonoBehaviour
     public static AudioManager Instance { get; private set; }
 
     [Header("Audio Sources")]
-    [Tooltip("AudioSource khusus untuk memutar musik latar (BGM).")]
+    [Tooltip("AudioSource used specifically for playing Background Music (BGM).")]
     [SerializeField] private AudioSource bgmSource;
     
-    [Tooltip("AudioSource khusus untuk memutar efek suara (SFX).")]
+    [Tooltip("AudioSource used specifically for playing Sound Effects (SFX).")]
     [SerializeField] private AudioSource sfxSource;
 
     [Header("Melody Library")]
-    [Tooltip("Daftar seluruh musik latar yang ada di dalam dunia ini.")]
+    [Tooltip("List of all background music available in the game.")]
     [SerializeField] private SoundData[] bgmLibrary;
     
-    [Tooltip("Daftar seluruh efek suara yang ada di dalam dunia ini.")]
+    [Tooltip("List of all sound effects available in the game.")]
     [SerializeField] private SoundData[] sfxLibrary;
 
     private void Awake()
     {
-        // Memastikan hanya ada satu konduktor di seluruh semesta
+        // Ensure only one AudioManager exists in the entire game
         if (Instance != null && Instance != this)
         {
             Destroy(this.gameObject);
@@ -43,36 +46,30 @@ public class AudioManager : MonoBehaviour
         else
         {
             Instance = this;
-            // Menjaga agar alunan musik tidak terputus meski berpindah tempat (scene)
+            // Prevent the audio from stopping when changing scenes
             DontDestroyOnLoad(this.gameObject); 
         }
-
-        // Memastikan BGM terus berulang (loop)
-        if (bgmSource != null)
-        {
-            bgmSource.loop = true;
-        }
     }
-
-    // --- SIFAT AJAIB UNTUK MEMANGGIL MUSIK ---
 
     public void PlayBGM(string name)
     {
         SoundData s = Array.Find(bgmLibrary, sound => sound.soundName == name);
         if (s == null)
         {
-            Debug.LogWarning("BGM dengan nama " + name + " tidak ditemukan di perpustakaan nada.");
+            Debug.LogWarning("BGM with name " + name + " is not found in the library.");
             return;
         }
 
-        // Jika lagu yang sama sudah berputar, biarkan ia terus mengalun tanpa mengulangnya dari awal
+        // If the exact same song is already playing, do not restart it
         if (bgmSource.clip == s.clip && bgmSource.isPlaying)
         {
             return;
         }
 
+        // Apply the settings from the SoundData and play
         bgmSource.clip = s.clip;
         bgmSource.volume = s.volume;
+        bgmSource.loop = s.loop; 
         bgmSource.Play();
     }
 
@@ -89,11 +86,11 @@ public class AudioManager : MonoBehaviour
         SoundData s = Array.Find(sfxLibrary, sound => sound.soundName == name);
         if (s == null)
         {
-            Debug.LogWarning("SFX dengan nama " + name + " tidak ditemukan di perpustakaan nada.");
+            Debug.LogWarning("SFX with name " + name + " is not found in the library.");
             return;
         }
 
-        // PlayOneShot memungkinkan suara dimainkan bertumpuk (seperti suara langkah kaki yang cepat)
+        // PlayOneShot allows sounds to overlap (useful for rapid sound effects)
         sfxSource.PlayOneShot(s.clip, s.volume);
     }
 }
